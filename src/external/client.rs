@@ -25,7 +25,7 @@ use tokio::{net::TcpStream, sync::Semaphore, time};
 use std::{
     net::{Ipv4Addr, SocketAddr},
     sync::Arc,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use talk::{
@@ -64,6 +64,7 @@ impl Client {
 
         info!("Prepare batch number: {}", prepare_batch_number);
         info!("Prepare batch size: {}", prepare_batch_size);
+        info!("Mini batch size: {}", prepare_batch_size/parallel_streams);
         info!(
             "Prepare single sign percentage: {}",
             prepare_single_sign_percentage
@@ -91,7 +92,8 @@ impl Client {
             vec_id_assignments.push(id_assignments);
         }
 
-        let prepare_request_batches = (0..(prepare_batch_number as f64/cyclical_batches as f64).ceil() as usize)
+        let prepare_request_batches = (0..(prepare_batch_number as f64 / cyclical_batches as f64)
+            .ceil() as usize)
             .map(|height| {
                 vec_batch_keychains
                     .iter()
@@ -155,18 +157,26 @@ impl Client {
             .into_iter()
             .zip(connections.into_iter())
             .enumerate()
-        {   
+        {
             let mut permits = Vec::new();
+            let mut instant = None;
             for _ in 0..parallel_streams {
                 let permit = {
                     if let Ok(permit) = semaphore.clone().try_acquire_owned() {
                         permit
                     } else {
-                        warn!("Client could not keep up with rate!");
+                        instant = Some(Instant::now());
                         semaphore.clone().acquire_owned().await.unwrap()
                     }
                 };
                 permits.push(permit);
+            }
+
+            if let Some(instant) = instant {
+                warn!(
+                    "Client could not keep up with rate! Delayed for {} ms",
+                    instant.elapsed().as_millis()
+                );
             }
 
             let handle = tokio::spawn(async move {
@@ -177,12 +187,16 @@ impl Client {
 
                 info!("Client sending batch for height {}", height);
 
+                let num_mini_batches = mini_batches.len();
+
                 mini_batches
                     .into_iter()
                     .zip(connections.into_iter())
-                    .zip(permits)
+                    .zip(permits).enumerate()
                     .map(
-                        |((batch, (mut prepare_connection, mut commit_connection)), permit)| async move {
+                        |(num, ((batch, (mut prepare_connection, mut commit_connection)), permit))| async move {
+                            info!("Client sending mini-batch {}", height * num_mini_batches + num);
+
                             prepare_connection
                                 .send::<Vec<PrepareRequest>>(&batch)
                                 .await
@@ -279,6 +293,8 @@ impl Client {
                                 .zip(payloads.into_iter())
                                 .map(|(proof, payload)| Completion::new(proof, payload))
                                 .collect::<Vec<_>>();
+
+                            info!("Client completed mini-batch {}", height * num_mini_batches + num);
                         },
                     )
                     .collect::<FuturesUnordered<_>>()
