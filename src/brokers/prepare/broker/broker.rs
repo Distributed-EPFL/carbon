@@ -88,7 +88,7 @@ impl Broker {
             })
             .collect::<Vec<_>>();
 
-        info!("Number of reductions: {}", reductions.len());
+        // info!("Number of reductions: {}", reductions.len());
 
         // Send each element of `reductions` to the appropriate `serve` task
 
@@ -98,11 +98,11 @@ impl Broker {
 
         // Wait for `reduction_sponge` to flush
 
-        info!("Waiting to flush reduction sponge");
+        // info!("Waiting to flush reduction sponge");
 
         let reduction_shards = reduction_sponge.flush().await;
 
-        info!("Flushed reduction sponge");
+        // info!("Flushed reduction sponge");
 
         // Aggregate reduction signature
 
