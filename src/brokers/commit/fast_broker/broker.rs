@@ -50,7 +50,7 @@ impl FastBroker {
                 .map_err(|_| BrokerFailure::Error)
                 .unwrap();
 
-        info!("Orchestrate took: {} ms", start.elapsed().as_millis());
+        // info!("Orchestrate took: {} ms", start.elapsed().as_millis());
 
         // Dispatch appropriate `CompletionProof` to all `serve` tasks
         let start = Instant::now();
@@ -62,10 +62,10 @@ impl FastBroker {
             })
             .collect::<Vec<_>>();
 
-        info!(
-            "Creating completion proofs took: {} ms",
-            start.elapsed().as_millis()
-        );
+        // info!(
+        //     "Creating completion proofs took: {} ms",
+        //     start.elapsed().as_millis()
+        // );
 
         // If `completion` is `Ok`, publish `BatchCommit` to all replicas
 

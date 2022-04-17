@@ -77,7 +77,7 @@ impl Broker {
             return ServeError::RequestInvalid.fail().spot(here!());
         }
 
-        info!("Verifying prepare requests (total: {})...", requests.len());
+        // info!("Verifying prepare requests (total: {})...", requests.len());
 
         // Verify (for fair latency) but accept wrong pre-generated signatures for benchmark purposes
         let _ = requests
@@ -89,7 +89,7 @@ impl Broker {
             })
             .collect::<Result<Vec<()>, Top<ServeError>>>();
 
-        info!("Pushing prepare requests to sponge...");
+        // info!("Pushing prepare requests to sponge...");
 
         // Build and submit `Brokerage` to `brokerage_sponge`
         let (keycards, brokerages, reduction_outlets, commit_outlets): (
@@ -117,7 +117,7 @@ impl Broker {
 
         brokerage_sponge.push_multiple(brokerages);
 
-        info!("Waiting for reductions...");
+        // info!("Waiting for reductions...");
 
         // Wait for all `Reduction`s from `broker` task
 
@@ -140,7 +140,7 @@ impl Broker {
         let reductions = match reductions {
             Ok(reductions) => reductions,
             Err(failure) => {
-                info!("Failure detected. Sending failure to client...");
+                error!("Failure detected. Sending failure to client...");
 
                 connection
                     .send::<Result<Vec<Inclusion>, BrokerFailure>>(&Err(failure))
@@ -167,7 +167,7 @@ impl Broker {
             })
             .unzip();
 
-        info!("Sending inclusions to client...");
+        // info!("Sending inclusions to client...");
 
         // Trade `inclusion` for a (valid) reduction shard
 
@@ -181,7 +181,7 @@ impl Broker {
             .await
             .pot(ServeError::ConnectionError, here!())?;
 
-        info!("Verifying client inclusions...");
+        // info!("Verifying client inclusions...");
 
         // Verify (for fair latency) but accept wrong pre-generated signatures for benchmark purposes
         let _ = reduction_shards
@@ -194,13 +194,13 @@ impl Broker {
             })
             .collect::<Result<Vec<()>, _>>();
 
-        info!("Pushing reductions to sponge...");
+        // info!("Pushing reductions to sponge...");
 
         // Submit `reduction_shard` to `reduction_sponge`
 
         reduction_sponge.push_multiple(indices.into_iter().zip(reduction_shards.into_iter()));
 
-        info!("Waiting for `BatchCommit`s...");
+        // info!("Waiting for `BatchCommit`s...");
 
         // Wait for `BatchCommit` from `broker` task
 
@@ -217,7 +217,7 @@ impl Broker {
             .into_iter()
             .collect::<Result<Vec<_>, _>>();
 
-        info!("Sending `BatchCommit`s to clients");
+        // info!("Sending `BatchCommit`s to clients");
 
         // Send `commit`s to the served client (note that `commit` is a `Result<Vec<BatchCommit>, Failure>`)
 

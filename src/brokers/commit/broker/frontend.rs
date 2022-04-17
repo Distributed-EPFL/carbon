@@ -74,8 +74,8 @@ impl Broker {
             return ServeError::RequestInvalid.fail().spot(here!());
         }
 
-        info!("Verifying commit requests (total: {})...", requests.len());
-        let start = Instant::now();
+        // info!("Verifying commit requests (total: {})...", requests.len());
+        // let start = Instant::now();
 
         // Verify (for fair latency) but accept wrong pre-generated signatures for benchmark purposes
         let _ = requests
@@ -104,15 +104,15 @@ impl Broker {
             })
             .unzip();
 
-        info!("Verified requests in {} ms", start.elapsed().as_millis());
+        // info!("Verified requests in {} ms", start.elapsed().as_millis());
 
-        info!("Pushing commits to sponge...");
+        // info!("Pushing commits to sponge...");
 
         brokerage_sponge.push_multiple(brokerages);
 
         // Wait for `Completion` from `broker` task
 
-        info!("Waiting for completions...");
+        // info!("Waiting for completions...");
 
         let completions = completion_outlets
             .into_iter()
@@ -127,7 +127,7 @@ impl Broker {
             .into_iter()
             .collect::<Result<Vec<CompletionProof>, _>>();
 
-        info!("Sending completions to client...");
+        // info!("Sending completions to client...");
 
         // Send `commit` to the served client (note that `commit` is a `Result<Completion, Failure>`)
 
@@ -136,7 +136,7 @@ impl Broker {
             .await
             .pot(ServeError::ConnectionError, here!())?;
 
-        info!("Completions sent!");
+        // info!("Completions sent!");
 
         // Successfully delivering a `BrokerFailure` to the served client is not a shortcoming
         // of `serve`, and should not result in an `Err` (see above)
