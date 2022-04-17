@@ -88,7 +88,7 @@ impl Broker {
             })
             .collect::<Vec<_>>();
 
-        // info!("Number of reductions: {}", reductions.len());
+        info!("Number of reductions: {}", reductions.len());
 
         // Send each element of `reductions` to the appropriate `serve` task
 
