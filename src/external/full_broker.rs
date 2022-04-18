@@ -83,7 +83,7 @@ impl FullBroker {
                 Err(e) => match e.top() {
                     RendezvousClientError::ShardIncomplete => {
                         info!("Shard still incomplete, sleeping...");
-                        time::sleep(Duration::from_millis(500)).await
+                        time::sleep(Duration::from_millis(1000)).await
                     }
                     _ => {
                         error!("Error obtaining first shard view");
@@ -159,7 +159,7 @@ impl FullBroker {
             brokerage_sponge_settings: sponge_settings,
             reduction_threshold: reduction_threshold as f64 / 100 as f64,
             reduction_timeout: Duration::from_millis(reduction_timeout as u64),
-            optimistic_witness_timeout: Duration::from_secs(1),
+            optimistic_witness_timeout: Duration::from_secs(5),
             ping_interval: Duration::from_secs(60),
         };
 
