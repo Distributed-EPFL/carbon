@@ -64,7 +64,7 @@ impl Client {
 
         info!("Prepare batch number: {}", prepare_batch_number);
         info!("Prepare batch size: {}", prepare_batch_size);
-        info!("Mini batch size: {}", prepare_batch_size/parallel_streams);
+        info!("Mini batch size: {}", prepare_batch_size / parallel_streams);
         info!(
             "Prepare single sign percentage: {}",
             prepare_single_sign_percentage
@@ -126,22 +126,9 @@ impl Client {
 
         info!("Connecting with brokers...");
 
-        let connections: Vec<Vec<(PlainConnection, PlainConnection)>> = (0
-            ..prepare_request_batches.len())
+        let mut connections_vec: Vec<Vec<(PlainConnection, PlainConnection)>> = (0..10)
             .map(|_| async move {
-                let mut connections = Vec::new();
-
-                for _ in 0..parallel_streams {
-                    let stream = TcpStream::connect(prepare_address).await.unwrap();
-                    let prepare_connection: PlainConnection = stream.into();
-
-                    let stream = TcpStream::connect(commit_address).await.unwrap();
-                    let commit_connection: PlainConnection = stream.into();
-
-                    connections.push((prepare_connection, commit_connection));
-                }
-
-                connections
+                get_connections(prepare_address, commit_address, parallel_streams).await
             })
             .collect::<FuturesUnordered<_>>()
             .collect::<Vec<_>>()
@@ -153,11 +140,10 @@ impl Client {
 
         let mut handles = Vec::new();
 
-        for (height, (batch, connections)) in prepare_request_batches
-            .into_iter()
-            .zip(connections.into_iter())
-            .enumerate()
-        {
+        for (height, batch) in prepare_request_batches.into_iter().enumerate() {
+            let connections = connections_vec.pop().unwrap();
+            connections_vec.push(get_connections(prepare_address, commit_address, parallel_streams).await);
+
             let mut permits = Vec::new();
             let mut instant = None;
             for _ in 0..parallel_streams {
@@ -192,10 +178,17 @@ impl Client {
                 mini_batches
                     .into_iter()
                     .zip(connections.into_iter())
-                    .zip(permits).enumerate()
+                    .zip(permits)
+                    .enumerate()
                     .map(
-                        |(num, ((batch, (mut prepare_connection, mut commit_connection)), permit))| async move {
-                            info!("Client sending mini-batch {}", height * num_mini_batches + num);
+                        |(
+                            num,
+                            ((batch, (mut prepare_connection, mut commit_connection)), permit),
+                        )| async move {
+                            info!(
+                                "Client sending mini-batch {}",
+                                height * num_mini_batches + num
+                            );
 
                             prepare_connection
                                 .send::<Vec<PrepareRequest>>(&batch)
@@ -204,7 +197,7 @@ impl Client {
 
                             // let bytes_sent = bincode::serialize(&batch).unwrap().len();
                             // info!("Sent {} bytes", bytes_sent);
-    
+
                             let inclusions = prepare_connection
                                 .receive::<Result<Vec<Inclusion>, PrepareBrokerFailure>>()
                                 .await
@@ -212,10 +205,10 @@ impl Client {
                                 .unwrap();
 
                             drop(permit);
-    
+
                             // let bytes_received = bincode::serialize(&inclusions).unwrap().len();
                             // info!("Received {} bytes", bytes_received);
-    
+
                             // When benchmarking, we only simulate the processing time of a single client
                             // In real life, each client is separate and only processes their own transaction
                             // so other clients' processing time should not be included in latency
@@ -224,56 +217,58 @@ impl Client {
                             //         .certify_reduction(&keychain, prepare_request.prepare())
                             //         .unwrap();
                             // }
-    
+
                             let signatures = vec![reduction_shard; inclusions.len()];
                             prepare_connection.send(&signatures).await.unwrap();
-    
+
                             // let bytes_sent = bincode::serialize(&signatures).unwrap().len();
                             // info!("Sent {} bytes", bytes_sent);
-    
+
                             let batch_commits = prepare_connection
                                 .receive::<Result<Vec<BatchCommit>, PrepareBrokerFailure>>()
                                 .await
                                 .unwrap()
                                 .unwrap();
-    
+
                             // let bytes_received = bincode::serialize(&batch_commits).unwrap().len();
                             // info!("Received {} bytes", bytes_received);
-    
+
                             // info!("Got batch commits!");
-    
-                            let (commit_requests, payloads): (Vec<CommitRequest>, Vec<Payload>) = batch
-                                .into_par_iter()
-                                .zip(inclusions.into_par_iter())
-                                .zip(batch_commits.into_par_iter())
-                                .map(|((prepare_request, inclusion), commit)| {
-                                    let commit_proof = CommitProof::new(commit, inclusion.proof);
-    
-                                    let payload = Payload::new(
-                                        Entry {
-                                            id: prepare_request.prepare().id(),
-                                            height: (prepare_request.prepare().height()),
-                                        },
-                                        Operation::withdraw(
-                                            prepare_request.prepare().id(),
-                                            prepare_request.prepare().height() - 1,
-                                            0,
-                                        ),
-                                    );
-    
-                                    let commit = Commit::new(commit_proof, payload.clone());
-    
-                                    let commit_request = CommitRequest::new(commit, None);
-    
-                                    (commit_request, payload)
-                                })
-                                .unzip();
-    
+
+                            let (commit_requests, payloads): (Vec<CommitRequest>, Vec<Payload>) =
+                                batch
+                                    .into_par_iter()
+                                    .zip(inclusions.into_par_iter())
+                                    .zip(batch_commits.into_par_iter())
+                                    .map(|((prepare_request, inclusion), commit)| {
+                                        let commit_proof =
+                                            CommitProof::new(commit, inclusion.proof);
+
+                                        let payload = Payload::new(
+                                            Entry {
+                                                id: prepare_request.prepare().id(),
+                                                height: (prepare_request.prepare().height()),
+                                            },
+                                            Operation::withdraw(
+                                                prepare_request.prepare().id(),
+                                                prepare_request.prepare().height() - 1,
+                                                0,
+                                            ),
+                                        );
+
+                                        let commit = Commit::new(commit_proof, payload.clone());
+
+                                        let commit_request = CommitRequest::new(commit, None);
+
+                                        (commit_request, payload)
+                                    })
+                                    .unzip();
+
                             commit_connection
                                 .send::<Vec<CommitRequest>>(&commit_requests)
                                 .await
                                 .unwrap();
-    
+
                             let completion_proofs = match commit_connection
                                 .receive::<Result<Vec<CompletionProof>, CommitBrokerFailure>>()
                                 .await
@@ -285,16 +280,19 @@ impl Client {
                                     Err(e).unwrap()
                                 }
                             };
-    
+
                             // info!("Got completion proofs!");
-    
+
                             let _withdrawals = completion_proofs
                                 .into_iter()
                                 .zip(payloads.into_iter())
                                 .map(|(proof, payload)| Completion::new(proof, payload))
                                 .collect::<Vec<_>>();
 
-                            info!("Client completed mini-batch {}", height * num_mini_batches + num);
+                            info!(
+                                "Client completed mini-batch {}",
+                                height * num_mini_batches + num
+                            );
                         },
                     )
                     .collect::<FuturesUnordered<_>>()
@@ -320,6 +318,26 @@ impl Client {
 
         Ok(Client {})
     }
+}
+
+async fn get_connections(
+    prepare_address: SocketAddr,
+    commit_address: SocketAddr,
+    parallel_streams: usize,
+) -> Vec<(PlainConnection, PlainConnection)> {
+    let mut connections = Vec::new();
+
+    for _ in 0..parallel_streams {
+        let stream = TcpStream::connect(prepare_address).await.unwrap();
+        let prepare_connection: PlainConnection = stream.into();
+
+        let stream = TcpStream::connect(commit_address).await.unwrap();
+        let commit_connection: PlainConnection = stream.into();
+
+        connections.push((prepare_connection, commit_connection));
+    }
+
+    connections
 }
 
 async fn get_address(
