@@ -126,7 +126,7 @@ impl Client {
 
         info!("Connecting with brokers...");
 
-        let mut connections_vec: Vec<Vec<(PlainConnection, PlainConnection)>> = (0..10)
+        let mut connections_vec: Vec<Vec<(PlainConnection, PlainConnection)>> = (0..5)
             .map(|_| async move {
                 get_connections(prepare_address, commit_address, parallel_streams).await
             })
@@ -141,27 +141,29 @@ impl Client {
         let mut handles = Vec::new();
 
         for (height, batch) in prepare_request_batches.into_iter().enumerate() {
+            let instant = Instant::now();
+
             let connections = connections_vec.pop().unwrap();
-            connections_vec.push(get_connections(prepare_address, commit_address, parallel_streams).await);
+            connections_vec
+                .push(get_connections(prepare_address, commit_address, parallel_streams).await);
 
             let mut permits = Vec::new();
-            let mut instant = None;
             for _ in 0..parallel_streams {
                 let permit = {
                     if let Ok(permit) = semaphore.clone().try_acquire_owned() {
                         permit
                     } else {
-                        instant = Some(Instant::now());
                         semaphore.clone().acquire_owned().await.unwrap()
                     }
                 };
                 permits.push(permit);
             }
 
-            if let Some(instant) = instant {
+            let elapsed = instant.elapsed().as_millis();
+            if elapsed > 100 {
                 warn!(
                     "Client could not keep up with rate! Delayed for {} ms",
-                    instant.elapsed().as_millis()
+                    elapsed
                 );
             }
 
