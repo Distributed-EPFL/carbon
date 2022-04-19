@@ -77,7 +77,7 @@ impl Client {
         let client = RendezvousClient::new(rendezvous.clone(), Default::default());
 
         let send_period = (prepare_batch_size as f64) / individual_rate as f64;
-        let cyclical_batches = (6f64 / send_period).ceil() as usize;
+        let cyclical_batches = (10f64 / send_period).ceil() as usize;
         info!(
             "Send period: {}. Generating enough ids for {} non-interfering batches.",
             send_period, cyclical_batches
