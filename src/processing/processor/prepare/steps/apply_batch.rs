@@ -1,4 +1,5 @@
 use buckets::{Buckets, Split};
+use log::info;
 
 use crate::{
     account::Id,
@@ -14,7 +15,7 @@ use crate::{
 
 use doomstack::{here, ResultExt, Top};
 
-use std::collections::{HashMap, HashSet};
+use std::{collections::{HashMap, HashSet}, time::Instant};
 
 use talk::{
     crypto::{primitives::hash::Hash, KeyChain},
@@ -40,6 +41,8 @@ pub(in crate::processing::processor::prepare) async fn apply_batch(
     let mut database = database
         .lock()
         .pot(ServePrepareError::DatabaseVoid, here!())?;
+
+    let start = Instant::now();
 
     // This function extracts the appropriate (mutable and immutable) references to
     // `database`'s fields from a mutable reference to `database`. It is unclear
@@ -169,6 +172,11 @@ pub(in crate::processing::processor::prepare) async fn apply_batch(
     let holder = BatchHolder::new(batch);
 
     database.prepare.batches.insert(root, holder);
+
+    info!(
+        "Prepare: applied batch in {} ms",
+        start.elapsed().as_millis()
+    );
 
     // Use `exceptions` to return an appropriate `BatchCommitShard`
 

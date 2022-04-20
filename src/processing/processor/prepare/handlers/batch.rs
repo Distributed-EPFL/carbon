@@ -13,7 +13,6 @@ use crate::{
 
 use doomstack::{here, ResultExt, Top};
 
-use log::info;
 use talk::{crypto::KeyChain, net::Session, sync::voidable::Voidable};
 
 use zebra::vector::Vector;
@@ -33,12 +32,7 @@ pub(in crate::processing::processor::prepare) async fn batch(
 
     // Apply `batch` to `database` to obtain a `BatchCommitShard`
 
-    let start = Instant::now();
     let shard = steps::apply_batch(keychain, view, database, batch).await?;
-    info!(
-        "Prepare: applied batch in {} ms",
-        start.elapsed().as_millis()
-    );
 
     // Send `shard` and end `session`
 

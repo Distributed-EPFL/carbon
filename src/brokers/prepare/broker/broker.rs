@@ -14,7 +14,7 @@ use doomstack::{here, Doom, ResultExt, Top};
 
 use futures::stream::{FuturesUnordered, StreamExt};
 
-use std::{iter, sync::Arc};
+use std::{iter, sync::Arc, time::Instant};
 
 use log::info;
 
@@ -106,6 +106,8 @@ impl Broker {
 
         // Aggregate reduction signature
 
+        let start = Instant::now();
+
         // Each element of `reduction_shards` has been previously verified, and can be
         // aggregated without any further checks
         let reduction_signature =
@@ -114,6 +116,8 @@ impl Broker {
                 shard
             }))
             .unwrap();
+
+        info!("Multisig: Aggregated signatures in {} ms", start.elapsed().as_millis());
 
         // Prepare `Submission`
 

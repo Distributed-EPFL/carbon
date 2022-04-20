@@ -1,4 +1,5 @@
 use buckets::{Buckets, Split};
+use log::info;
 
 use crate::{
     account::{Account, Entry, Id, Operation},
@@ -14,7 +15,7 @@ use crate::{
 
 use doomstack::{here, Doom, ResultExt, Top};
 
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Instant};
 
 use talk::{crypto::KeyChain, sync::voidable::Voidable};
 
@@ -39,10 +40,14 @@ pub(in crate::processing::processor::commit) async fn apply_batch(
         .map(Payload::entry)
         .collect::<Split<_>>();
 
+    let mut start;
+
     let inapplicable_ids = {
         let mut database = database
             .lock()
             .pot(ServeCommitError::DatabaseVoid, here!())?;
+
+        start = Instant::now();
 
         buckets::apply_sparse(&mut database.accounts, entries, |accounts, entry| {
             // Fetch `entry.id`'s `Account` (if no operation was previously
@@ -81,10 +86,14 @@ pub(in crate::processing::processor::commit) async fn apply_batch(
         |(_, (payload, _))| payload.id(),
     );
 
+    let mut sum_elapsed = start.elapsed().as_millis();
+
     let flush = {
         let mut database = database
             .lock()
             .pot(ServeCommitError::DatabaseVoid, here!())?;
+
+        start = Instant::now();
 
         // Apply each `(_, (payload, dependency))` in `applications` to `database.accounts`,
         // then store `payload` in `database.commit.payloads` as a `PayloadHandle`
@@ -159,13 +168,24 @@ pub(in crate::processing::processor::commit) async fn apply_batch(
         })
         .collect::<Vec<_>>();
 
+    sum_elapsed += start.elapsed().as_millis();
+
     {
         let mut database = database
             .lock()
             .pot(ServeCommitError::DatabaseVoid, here!())?;
 
+        start = Instant::now();    
+
         database.imminent.execute(transaction);
     }
+
+    sum_elapsed += start.elapsed().as_millis();
+
+    info!(
+        "Commit: applied batch in {} ms",
+        sum_elapsed
+    );
 
     // Sign and return a `BatchCompletionShard` with the appropriate `exceptions`
 
