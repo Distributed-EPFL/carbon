@@ -189,7 +189,7 @@ impl FastBroker {
         let submission = Submission::new(
             assignments,
             prepares,
-            reduction_signature,
+            Some(reduction_signature),
             individual_signatures,
         );
 

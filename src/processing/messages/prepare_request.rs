@@ -14,7 +14,7 @@ use zebra::vector::Vector;
 pub(crate) enum PrepareRequest {
     Ping,
     Batch(Vector<Prepare>),
-    Signatures(MultiSignature, Vec<Option<Signature>>),
+    Signatures(Option<MultiSignature>, Vec<Option<Signature>>),
     Assignments(Vec<IdAssignment>),
     Witness(Certificate),
     Commit(BatchCommit),

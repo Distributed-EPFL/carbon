@@ -100,30 +100,31 @@ impl Broker {
 
         // info!("Waiting to flush reduction sponge");
 
-        let reduction_shards = if settings.reduction_threshold == 0f64 {
-            vec!()
+        let reduction_signature = if settings.reduction_threshold > 0f64 {
+            let reduction_shards = reduction_sponge.flush().await;
+
+            // info!("Flushed reduction sponge");
+    
+            // Aggregate reduction signature
+    
+            let start = Instant::now();
+    
+            // Each element of `reduction_shards` has been previously verified, and can be
+            // aggregated without any further checks
+            let reduction_signature =
+                MultiSignature::fast_aggregate(reduction_shards.into_iter().map(|(index, shard)| {
+                    individual_signatures[index] = None;
+                    shard
+                }))
+                .unwrap();
+    
+            info!("Multisig: Aggregated signatures in {} us", start.elapsed().as_micros());
+
+            Some(reduction_signature)
         } else {
-            reduction_sponge.flush().await
+            info!("Multisig: Aggregated signatures in 0 us");
+            None
         };
-
-        info!("Number of shards: {}", reduction_shards.len());
-
-        // info!("Flushed reduction sponge");
-
-        // Aggregate reduction signature
-
-        let start = Instant::now();
-
-        // Each element of `reduction_shards` has been previously verified, and can be
-        // aggregated without any further checks
-        let reduction_signature =
-            MultiSignature::fast_aggregate(reduction_shards.into_iter().map(|(index, shard)| {
-                individual_signatures[index] = None;
-                shard
-            }))
-            .unwrap();
-
-        info!("Multisig: Aggregated signatures in {} us", start.elapsed().as_micros());
 
         // Prepare `Submission`
 

@@ -12,14 +12,14 @@ use zebra::vector::Vector;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct SignedBatch {
     prepares: Vector<Prepare>,
-    reduction_signature: MultiSignature,
+    reduction_signature: Option<MultiSignature>,
     individual_signatures: Vec<Option<Signature>>,
 }
 
 impl SignedBatch {
     pub fn new(
         prepares: Vector<Prepare>,
-        reduction_signature: MultiSignature,
+        reduction_signature: Option<MultiSignature>,
         individual_signatures: Vec<Option<Signature>>,
     ) -> Self {
         SignedBatch {
@@ -37,7 +37,7 @@ impl SignedBatch {
         self.prepares.items()
     }
 
-    pub fn reduction_signature(&self) -> MultiSignature {
+    pub fn reduction_signature(&self) -> Option<MultiSignature> {
         self.reduction_signature
     }
 

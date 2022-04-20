@@ -26,7 +26,7 @@ impl Submission {
     pub fn new(
         assignments: Vec<IdAssignment>,
         prepares: Vector<Prepare>,
-        reduction_signature: MultiSignature,
+        reduction_signature: Option<MultiSignature>,
         individual_signatures: Vec<Option<Signature>>,
     ) -> Self {
         Submission {

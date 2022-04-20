@@ -86,20 +86,22 @@ pub(in crate::processing::processor::prepare) async fn validate_signed(
 
     info!("Number of signers: {}", reduction_signers.len());
 
-    // Verify `batch`'s reduction statement against `reduction_signers`
-    info!("Batch root: {:?}", batch.root());
+    if let Some(reduction_signature) = batch.reduction_signature() {
+        // Verify `batch`'s reduction statement against `reduction_signers`
+        info!("Batch root: {:?}", batch.root());
+    
+        let reduction_statement = ReductionStatement::new(batch.root());
+    
+        let _ = reduction_signature
+            .verify(reduction_signers, &reduction_statement)
+            .pot(ServePrepareError::InvalidBatch, here!()); // Accept all signatures
+    
+        info!(
+            "Prepare: validated batch multisignature in {} ms",
+            start.elapsed().as_millis()
+        );
+    }
 
-    let reduction_statement = ReductionStatement::new(batch.root());
-
-    let _ = batch
-        .reduction_signature()
-        .verify(reduction_signers, &reduction_statement)
-        .pot(ServePrepareError::InvalidBatch, here!()); // Accept all signatures
-
-    info!(
-        "Prepare: validated batch multisignature in {} ms",
-        start.elapsed().as_millis()
-    );
 
     // `batch` is valid, generate and return witness shard
 
