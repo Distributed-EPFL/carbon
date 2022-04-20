@@ -67,6 +67,8 @@ pub(in crate::processing::processor::commit) async fn apply_batch(
         })
     };
 
+    let mut sum_elapsed = start.elapsed().as_millis();
+
     // The whole batch must be applicable in order to be processed
 
     // Skip this for benchmark
@@ -85,8 +87,6 @@ pub(in crate::processing::processor::commit) async fn apply_batch(
             .enumerate(),
         |(_, (payload, _))| payload.id(),
     );
-
-    let mut sum_elapsed = start.elapsed().as_millis();
 
     let flush = {
         let mut database = database
