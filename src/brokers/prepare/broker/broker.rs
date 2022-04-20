@@ -117,12 +117,9 @@ impl Broker {
                     shard
                 }))
                 .unwrap();
-    
-            info!("Multisig: Aggregated signatures in {} us", start.elapsed().as_micros());
 
             Some(reduction_signature)
         } else {
-            info!("Multisig: Aggregated signatures in 0 us");
             None
         };
 
