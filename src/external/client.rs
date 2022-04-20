@@ -218,6 +218,12 @@ impl Client {
                             //         .certify_reduction(&keychain, prepare_request.prepare())
                             //         .unwrap();
                             // }
+                            if num * 100 / num_mini_batches < prepare_single_sign_percentage {
+                                time::sleep(Duration::from_millis(
+                                    1000,
+                                ))
+                                .await;
+                            }
 
                             let signatures = vec![reduction_shard; inclusions.len()];
                             prepare_connection.send(&signatures).await.unwrap();

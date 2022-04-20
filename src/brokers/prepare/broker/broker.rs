@@ -102,6 +102,8 @@ impl Broker {
 
         let reduction_shards = reduction_sponge.flush().await;
 
+        info!("Number of shards: {}", reduction_shards.len());
+
         // info!("Flushed reduction sponge");
 
         // Aggregate reduction signature
