@@ -100,7 +100,11 @@ impl Broker {
 
         // info!("Waiting to flush reduction sponge");
 
-        let reduction_shards = reduction_sponge.flush().await;
+        let reduction_shards = if settings.reduction_threshold == 0f64 {
+            vec!()
+        } else {
+            reduction_sponge.flush().await
+        };
 
         info!("Number of shards: {}", reduction_shards.len());
 
