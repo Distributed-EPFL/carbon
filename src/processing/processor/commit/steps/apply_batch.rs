@@ -158,6 +158,8 @@ pub(in crate::processing::processor::commit) async fn apply_batch(
     }
     .join();
 
+    sum_elapsed += start.elapsed().as_millis();
+
     let mut transaction = TableTransaction::new();
 
     let exceptions = flush
@@ -168,14 +170,12 @@ pub(in crate::processing::processor::commit) async fn apply_batch(
         })
         .collect::<Vec<_>>();
 
-    sum_elapsed += start.elapsed().as_millis();
-
     {
         let mut database = database
             .lock()
             .pot(ServeCommitError::DatabaseVoid, here!())?;
 
-        start = Instant::now();    
+        start = Instant::now();
 
         database.imminent.execute(transaction);
     }
