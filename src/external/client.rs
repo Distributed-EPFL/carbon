@@ -6,7 +6,10 @@ use crate::{
         signup::BrokerFailure as SignupBrokerFailure,
     },
     commit::{Commit, CommitProof, Completion, CompletionProof, Payload},
-    external::parameters::{ClientParameters, Export, Parameters},
+    external::{
+        fast_signup_broker::FastSignupBroker,
+        parameters::{ClientParameters, Export, Parameters},
+    },
     prepare::{BatchCommit, Prepare, ReductionStatement},
     signup::{IdAssignment, IdRequest},
     view::View,
@@ -30,7 +33,9 @@ use std::{
 
 use talk::{
     crypto::{primitives::hash, KeyCard, KeyChain},
-    link::rendezvous::{Client as RendezvousClient, ClientError as RendezvousClientError, ShardId},
+    link::rendezvous::{
+        Client as RendezvousClient, ClientError as RendezvousClientError, Connector, ShardId,
+    },
     net::{traits::TcpConnect, PlainConnection},
 };
 
@@ -83,14 +88,8 @@ impl Client {
             send_period, cyclical_batches
         );
 
-        let mut vec_batch_keychains = Vec::new();
-        let mut vec_id_assignments = Vec::new();
-        for _ in 0..cyclical_batches {
-            let (batch_keychains, id_assignments) =
-                get_assignments(&client, prepare_batch_size).await?;
-            vec_batch_keychains.push(batch_keychains);
-            vec_id_assignments.push(id_assignments);
-        }
+        let (vec_batch_keychains, vec_id_assignments) =
+            get_assignments(&client, rendezvous.clone(), cyclical_batches, prepare_batch_size).await;
 
         let prepare_request_batches = (0..(prepare_batch_number as f64 / cyclical_batches as f64)
             .ceil() as usize)
@@ -380,11 +379,13 @@ async fn get_commit_address(
     get_address(client, preferred_address, 4).await
 }
 
-async fn get_assignments(
+async fn get_assignments<A: 'static + TcpConnect + Clone>(
     client: &RendezvousClient,
+    rendezvous: A,
+    num_batches: usize,
     amount: usize,
-) -> Result<(Vec<KeyChain>, Vec<IdAssignment>), Top<ClientError>> {
-    let shard = get_shard(&client, 2).await?;
+) -> (Vec<Vec<KeyChain>>, Vec<Vec<IdAssignment>>) {
+    let shard = get_shard(&client, 2).await.unwrap();
 
     info!(
         "Obtained shard! Honest broker identities {:?}",
@@ -399,7 +400,7 @@ async fn get_assignments(
         addresses.push(client.get_address(broker.identity()).await.unwrap());
     }
 
-    let mut shard = get_shard(&client, 0).await?;
+    let mut shard = get_shard(&client, 0).await.unwrap();
     shard.sort_by_key(|keycard| keycard.identity());
 
     info!(
@@ -410,38 +411,32 @@ async fn get_assignments(
             .collect::<Vec<_>>()
     );
 
-    let allocator = shard.iter().next().unwrap().identity();
     let genesis = View::genesis(shard);
 
     info!("Generating IdRequests...");
 
-    let (batch_key_chains, batch_requests): (Vec<KeyChain>, Vec<IdRequest>) = (0..amount)
-        .map(|_| {
-            let keychain = KeyChain::random();
-            let request = IdRequest::new(&keychain, &genesis, allocator.clone(), 0);
+    let keychain = KeyChain::random();
+    let connector = Connector::new(rendezvous.clone(), keychain.clone(), Default::default());
 
-            (keychain, request)
+    let clients = FastSignupBroker::signup(
+        genesis.clone(),
+        connector,
+        num_batches,
+        amount,
+        Default::default(),
+    )
+    .await;
+
+    let (key_chains, assignments): (Vec<Vec<KeyChain>>, Vec<Vec<IdAssignment>>) = clients
+        .chunks_exact(amount)
+        .map(|chunk| {
+            let (keychains, assignments): (Vec<KeyChain>, Vec<IdAssignment>) =
+                chunk.to_vec().into_iter().unzip();
+            (keychains, assignments)
         })
         .unzip();
 
-    info!("Getting assignments...");
-
-    let stream = TcpStream::connect(addresses[0].clone()).await.unwrap();
-    let mut signup_connection: PlainConnection = stream.into();
-
-    signup_connection.send(&batch_requests).await.unwrap();
-
-    let assignments: Vec<IdAssignment> = signup_connection
-        .receive::<Vec<Result<IdAssignment, SignupBrokerFailure>>>()
-        .await
-        .unwrap()
-        .into_iter()
-        .collect::<Result<Vec<IdAssignment>, SignupBrokerFailure>>()
-        .unwrap();
-
-    info!("All IdAssignments obtained.");
-
-    Ok((batch_key_chains, assignments))
+    (key_chains, assignments)
 }
 
 async fn get_shard(
