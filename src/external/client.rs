@@ -436,6 +436,8 @@ async fn get_assignments<A: 'static + TcpConnect + Clone>(
         })
         .unzip();
 
+    info!("All IdAssignments obtained.");
+
     (key_chains, assignments)
 }
 
