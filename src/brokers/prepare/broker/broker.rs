@@ -117,7 +117,7 @@ impl Broker {
             }))
             .unwrap();
 
-        info!("Multisig: Aggregated signatures in {} ms", start.elapsed().as_millis());
+        info!("Multisig: Aggregated signatures in {} us", start.elapsed().as_micros());
 
         // Prepare `Submission`
 
